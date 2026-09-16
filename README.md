@@ -107,7 +107,7 @@ sudo wg show
 ```
 
 **[SCREENSHOT 1: `sudo wg show` output showing the interface up, with the server key, port, and the connected peer]**
-`![WireGuard server running](./screenshots/wg-show.png)`
+![WireGuard server running](./screenshots/wg-show.png)
 
 ### Step 5: Create the client config file
 
