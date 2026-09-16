@@ -207,7 +207,7 @@ sudo ufw reload
 ```
 
 **[SCREENSHOT 4: `sudo ufw status verbose` output showing the route rule and the firewall rules]**
-`![UFW routing rule](./screenshots/ufw-route-rule.png)`
+![UFW routing rule](./screenshots/ufw-route-rule.png)
 
 ### Step 9: Confirm internet works through the tunnel
 
