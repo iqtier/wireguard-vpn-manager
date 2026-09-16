@@ -164,7 +164,7 @@ sudo shred -u /etc/wireguard/client1.conf
 ![WireGuard QR code](./screenshots/wireguard-qr-code.png)
 
 **[SCREENSHOT 3: The WireGuard app on the phone showing the tunnel added]**
-![Phone WireGuard app added](./screenshots/phone-app-connected.png)
+![Phone WireGuard app added](./screenshots/phone-app-connected.jpg)
 
 ### Step 7: First connection attempt, and the routing problem
 
