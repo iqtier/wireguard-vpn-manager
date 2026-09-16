@@ -47,7 +47,11 @@ The project is built in phases:
 
 ---
 
-## WireGuard Set up (Server and Client)
+## How I Set Up WireGuard, Step by Step
+
+This section follows the actual order I did things in, from creating keys to a working connection on my phone.
+
+### Step 1: Install WireGuard and generate keys
 
 I installed WireGuard on the Ubuntu server. Then I generated a key pair for the server and a key pair for the client. Each key pair has a private key and a public key.
 
@@ -60,7 +64,9 @@ wg genkey | tee client1_private.key | wg pubkey > client1_public.key
 
 The `umask 077` command makes sure the key files can only be read by the owner. This keeps the private keys safe from other users on the system.
 
-Next I created the server config file. This file tells WireGuard the server's own address inside the VPN, which port to listen on, and which clients are allowed to connect.
+### Step 2: Create the server config file
+
+This file tells WireGuard the server's own address inside the VPN, which port to listen on, and which client is allowed to connect.
 
 ```bash
 sudo nano /etc/wireguard/wg0.conf
@@ -77,7 +83,18 @@ PublicKey = <client_public_key>
 AllowedIPs = 10.8.0.2/32
 ```
 
-Then I started the WireGuard interface.
+### Step 3: Set up NAT so tunnel traffic can reach the internet
+
+Inside the same `wg0.conf` file, under the `[Interface]` section, I added two lines. These run automatically every time the tunnel starts and stops.
+
+```
+PostUp = iptables -t nat -A POSTROUTING -o ens33 -j MASQUERADE
+PostDown = iptables -t nat -D POSTROUTING -o ens33 -j MASQUERADE
+```
+
+This rule lets traffic coming from the VPN clients go out to the internet using the server's own network connection.
+
+### Step 4: Start the WireGuard interface
 
 ```bash
 sudo wg-quick up wg0
@@ -92,23 +109,80 @@ sudo wg show
 **[SCREENSHOT 1: `sudo wg show` output showing the interface up, with the server key, port, and the connected peer]**
 `![WireGuard server running](./screenshots/wg-show.png)`
 
----
+### Step 5: Create the client config file
 
-## How I Fixed the Routing Problem
+This file is what the phone actually needs to connect. It uses the client's own private key, and the server's public key and address, so the two sides can recognize each other.
 
-At one point, the client connected to the server successfully. The handshake worked. But the phone could not use the internet through the VPN.
+```bash
+cd /etc/wireguard
+SERVER_PUB=$(sudo cat server_public.key)
+CLIENT_PRIV=$(sudo cat client1_private.key)
 
-The problem was the server's firewall. By default, UFW blocks traffic that is routed through the server to somewhere else. This is different from normal incoming or outgoing traffic. Since VPN traffic needs to go from the phone, through the server, out to the internet, this counts as routed traffic. UFW was blocking it.
+sudo tee client1.conf > /dev/null <<EOF
+[Interface]
+PrivateKey = $CLIENT_PRIV
+Address = 10.8.0.2/32
+DNS = 1.1.1.1
 
-I fixed this in two steps.
+[Peer]
+PublicKey = $SERVER_PUB
+Endpoint = 192.168.2.50:51820
+AllowedIPs = 0.0.0.0/0
+PersistentKeepalive = 25
+EOF
 
-First, I added a rule that allows traffic to move from the VPN interface out to the internet interface.
+sudo chmod 600 client1.conf
+```
+
+`AllowedIPs = 0.0.0.0/0` tells the phone to send all of its internet traffic through the tunnel, not just some of it.
+
+### Step 6: Transfer the client config to my phone
+
+Instead of sending the file over email or a USB cable, I turned it into a QR code and scanned it directly with the WireGuard app. This way the private key never leaves the server as a saved file anywhere else, it only appears on screen for the scan.
+
+I installed a tool called `qrencode` to generate the QR code.
+
+```bash
+sudo apt install -y qrencode
+```
+
+Then I showed the client config as a QR code right in the terminal.
+
+```bash
+sudo qrencode -t ansiutf8 < /etc/wireguard/client1.conf
+```
+
+On the phone, I opened the WireGuard app, chose "Scan from QR code", and scanned the code shown in the terminal. The tunnel was added right away.
+
+After scanning, I deleted the temporary config file from the server using `shred`, which overwrites the file before deleting it. This is safer than a normal delete since the file briefly held a private key.
+
+```bash
+sudo shred -u /etc/wireguard/client1.conf
+```
+
+**[SCREENSHOT 2: The QR code shown in the terminal]**
+`![WireGuard QR code](./screenshots/wireguard-qr-code.png)`
+
+**[SCREENSHOT 3: The WireGuard app on the phone showing the tunnel added]**
+`![Phone WireGuard app added](./screenshots/phone-app-connected.png)`
+
+### Step 7: First connection attempt, and the routing problem
+
+I turned the tunnel on from the phone. The handshake worked right away, meaning the phone and server could see each other and trust each other's keys. But when I tried to open a webpage on the phone, nothing loaded. No internet was reaching the phone through the tunnel.
+
+The problem was the server's firewall. By default, UFW blocks traffic that is routed through the server to somewhere else. This is different from normal incoming or outgoing traffic on the server itself. Since the phone's internet traffic needs to go from the phone, through the server, out to the real internet, this counts as routed traffic. UFW was blocking it even though the tunnel itself was working fine.
+
+### Step 8: Fix the routing problem
+
+I fixed this in two parts.
+
+First, I added a rule that allows traffic to move from the VPN interface out to the internet facing interface.
 
 ```bash
 sudo ufw route allow in on wg0 out on ens33
 ```
 
-Second, I had to make sure IP forwarding was turned on, both at the system level and inside UFW's own settings. UFW keeps a separate copy of this setting, so both places needed to be correct.
+Second, I made sure IP forwarding was turned on, in two separate places. UFW keeps its own copy of this setting, separate from the main system setting, so both had to be correct or the fix would not hold.
 
 ```bash
 sudo nano /etc/sysctl.conf
@@ -132,49 +206,21 @@ Then I reloaded UFW.
 sudo ufw reload
 ```
 
-After this, I tested the fix by restarting the whole VM and checking that internet still worked from the phone without me running any commands manually. This proved the fix was permanent, not just a temporary patch.
-
-**[SCREENSHOT 2: `sudo ufw status verbose` output showing the route rule and the firewall rules]**
+**[SCREENSHOT 4: `sudo ufw status verbose` output showing the route rule and the firewall rules]**
 `![UFW routing rule](./screenshots/ufw-route-rule.png)`
 
-**[SCREENSHOT 3: Phone browser showing a webpage loading successfully while the VPN tunnel is connected]**
+### Step 9: Confirm internet works through the tunnel
+
+After the fix, I went back to the phone with the tunnel still on and opened a webpage. It loaded normally this time.
+
+To be sure the fix was permanent and not a lucky moment, I restarted the whole VM and tested again without running any manual commands first. Internet still worked right away, which proved the settings were saved correctly and not just applied temporarily.
+
+**[SCREENSHOT 5: Phone browser showing a webpage loading successfully while the VPN tunnel is connected]**
 `![Internet working through VPN](./screenshots/phone-internet-working.png)`
 
 ---
 
-## Transfering the Client Config
-
-Instead of sending the client config file over email or a USB cable, I turned it into a QR code and scanned it directly with the WireGuard app. This way the private key never leaves the server as a file, it only appears on the screen for the scan.
-
-I installed a tool called `qrencode` to generate the QR code.
-
-```bash
-sudo apt install -y qrencode
-```
-
-Then I built the client config file and piped it into `qrencode` to show it as a QR code right in the terminal.
-
-```bash
-sudo qrencode -t ansiutf8 < /etc/wireguard/client1.conf
-```
-
-On the phone, I opened the WireGuard app, chose "Scan from QR code", and scanned the code shown in the terminal. The tunnel was added immediately.
-
-After scanning, I deleted the temporary config file from the server using `shred`, which overwrites the file before deleting it. This is safer than a normal delete since the file briefly held a private key.
-
-```bash
-sudo shred -u /etc/wireguard/client1.conf
-```
-
-**[SCREENSHOT 4: The QR code shown in the terminal]**
-`![WireGuard QR code](./screenshots/wireguard-qr-code.png)`
-
-**[SCREENSHOT 5: The WireGuard app on the phone showing the tunnel added and connected]**
-`![Phone WireGuard app connected](./screenshots/phone-app-connected.png)`
-
----
-
-## Database Set up
+## How I Set Up the Database
 
 I installed PostgreSQL on the same Ubuntu server.
 
@@ -196,7 +242,7 @@ CREATE USER vpn_api WITH ENCRYPTED PASSWORD 'change_this_password';
 GRANT ALL PRIVILEGES ON DATABASE vpn_manager TO vpn_api;
 ```
 
-Then I tested the new user could actually connect:
+Then I tested that the new user could actually connect:
 
 ```bash
 psql -h localhost -U vpn_api -d vpn_manager
