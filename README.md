@@ -215,8 +215,7 @@ After the fix, I went back to the phone with the tunnel still on and opened a we
 
 To be sure the fix was permanent and not a lucky moment, I restarted the whole VM and tested again without running any manual commands first. Internet still worked right away, which proved the settings were saved correctly and not just applied temporarily.
 
-**[SCREENSHOT 5: Phone browser showing a webpage loading successfully while the VPN tunnel is connected]**
-`![Internet working through VPN](./screenshots/phone-internet-working.png)`
+
 
 ---
 
