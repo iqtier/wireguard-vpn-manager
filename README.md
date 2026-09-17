@@ -262,7 +262,7 @@ sudo -u postgres psql -d vpn_manager -c "SELECT * FROM \"Peers\";"
 ```
 
 **[SCREENSHOT 6: The test program output in the terminal, showing the row it inserted and the output of psql query]**
-`![EF Core test output](./screenshots/initial_database_connection.png)`
+![EF Core test output](./screenshots/initial_database_connection.png)
 
 
 ---
