@@ -261,11 +261,9 @@ The test program created a table, added a row, and read it back. I then checked 
 sudo -u postgres psql -d vpn_manager -c "SELECT * FROM \"Peers\";"
 ```
 
-**[SCREENSHOT 6: The test program output in the terminal, showing the row it inserted]**
-`![EF Core test output](./screenshots/efcore-test-output.png)`
+**[SCREENSHOT 6: The test program output in the terminal, showing the row it inserted and the output of psql query]**
+`![EF Core test output](./screenshots/initial_database_connection.png)`
 
-**[SCREENSHOT 7: The matching `psql` query result showing the same row]**
-`![Database query result](./screenshots/postgres-query-result.png)`
 
 ---
 
